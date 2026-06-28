@@ -2,14 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcryptjs');
-const crypto = require('crypto');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
 
 // =============================================
 // BANCO DE DADOS
@@ -17,7 +15,6 @@ app.use(express.static('public'));
 const db = new sqlite3.Database('./database.db');
 
 db.serialize(() => {
-    // Tabela de keys
     db.run(`
         CREATE TABLE IF NOT EXISTS keys (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,7 +32,6 @@ db.serialize(() => {
         )
     `);
 
-    // Tabela de usuários
     db.run(`
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,7 +48,6 @@ db.serialize(() => {
         )
     `);
 
-    // Tabela de admins
     db.run(`
         CREATE TABLE IF NOT EXISTS admins (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,7 +56,6 @@ db.serialize(() => {
         )
     `);
 
-    // Admin padrão
     const defaultPassword = bcrypt.hashSync('admin123', 10);
     db.run('INSERT OR IGNORE INTO admins (id, username, password) VALUES (1, ?, ?)', ['admin', defaultPassword]);
 });
@@ -95,10 +89,10 @@ function getExpirationDate(expiresIn) {
 }
 
 // =============================================
-// ============ ROTAS DA API ============
+// ROTAS DA API
 // =============================================
 
-// ============ GERAR KEY (ADMIN) ============
+// ============ GERAR KEY ============
 app.post('/api/generate-key', (req, res) => {
     const { admin_token, subscription, expires_in, quantity } = req.body;
 
@@ -128,7 +122,7 @@ app.post('/api/generate-key', (req, res) => {
     }
 });
 
-// ============ LISTAR KEYS (ADMIN) ============
+// ============ LISTAR KEYS ============
 app.get('/api/keys', (req, res) => {
     const { admin_token } = req.query;
     if (admin_token !== 'ADMIN_SECRET_TOKEN_123') {
@@ -136,11 +130,12 @@ app.get('/api/keys', (req, res) => {
     }
 
     db.all('SELECT * FROM keys ORDER BY created_at DESC', (err, keys) => {
+        if (err) return res.json({ success: false, message: 'Database error' });
         res.json({ success: true, keys: keys || [] });
     });
 });
 
-// ============ BAN KEY (ADMIN) ============
+// ============ BAN KEY ============
 app.post('/api/ban-key', (req, res) => {
     const { admin_token, key, reason } = req.body;
     if (admin_token !== 'ADMIN_SECRET_TOKEN_123') {
@@ -153,7 +148,7 @@ app.post('/api/ban-key', (req, res) => {
     });
 });
 
-// ============ UNBAN KEY (ADMIN) ============
+// ============ UNBAN KEY ============
 app.post('/api/unban-key', (req, res) => {
     const { admin_token, key } = req.body;
     if (admin_token !== 'ADMIN_SECRET_TOKEN_123') {
@@ -166,7 +161,7 @@ app.post('/api/unban-key', (req, res) => {
     });
 });
 
-// ============ DELETAR KEY (ADMIN) ============
+// ============ DELETAR KEY ============
 app.delete('/api/delete-key/:key', (req, res) => {
     const { admin_token } = req.query;
     const { key } = req.params;
@@ -181,7 +176,7 @@ app.delete('/api/delete-key/:key', (req, res) => {
     });
 });
 
-// ============ LISTAR USUÁRIOS (ADMIN) ============
+// ============ LISTAR USUARIOS ============
 app.get('/api/users', (req, res) => {
     const { admin_token } = req.query;
     if (admin_token !== 'ADMIN_SECRET_TOKEN_123') {
@@ -189,11 +184,12 @@ app.get('/api/users', (req, res) => {
     }
 
     db.all('SELECT * FROM users ORDER BY created_at DESC', (err, users) => {
+        if (err) return res.json({ success: false, message: 'Database error' });
         res.json({ success: true, users: users || [] });
     });
 });
 
-// ============ BAN USER (ADMIN) ============
+// ============ BAN USER ============
 app.post('/api/ban-user', (req, res) => {
     const { admin_token, username, reason } = req.body;
     if (admin_token !== 'ADMIN_SECRET_TOKEN_123') {
@@ -206,7 +202,7 @@ app.post('/api/ban-user', (req, res) => {
     });
 });
 
-// ============ UNBAN USER (ADMIN) ============
+// ============ UNBAN USER ============
 app.post('/api/unban-user', (req, res) => {
     const { admin_token, username } = req.body;
     if (admin_token !== 'ADMIN_SECRET_TOKEN_123') {
@@ -219,19 +215,13 @@ app.post('/api/unban-user', (req, res) => {
     });
 });
 
-// ============ LOGIN COM KEY (USUÁRIO) ============
+// ============ LOGIN ============
 app.post('/api/login', (req, res) => {
     const { key, hwid } = req.body;
 
-    if (!key) {
-        return res.json({ success: false, message: 'License key required' });
-    }
+    if (!key) return res.json({ success: false, message: 'License key required' });
+    if (!hwid) return res.json({ success: false, message: 'HWID required' });
 
-    if (!hwid) {
-        return res.json({ success: false, message: 'HWID required' });
-    }
-
-    // Buscar key
     db.get('SELECT * FROM keys WHERE key_license = ?', [key], (err, keyData) => {
         if (err || !keyData) {
             return res.json({ success: false, message: 'Invalid license key' });
@@ -241,29 +231,19 @@ app.post('/api/login', (req, res) => {
             return res.json({ success: false, message: 'Key is banned: ' + (keyData.ban_reason || 'No reason') });
         }
 
-        // Verifica se já foi usada
         if (keyData.status === 'Used') {
-            // Verifica HWID
             if (keyData.hwid && keyData.hwid !== hwid) {
                 return res.json({ success: false, message: 'HWID mismatch! This key is locked to another device.' });
             }
 
-            // Buscar usuário
             db.get('SELECT * FROM users WHERE key_license = ?', [key], (err, user) => {
-                if (err || !user) {
-                    return res.json({ success: false, message: 'User not found' });
-                }
+                if (err || !user) return res.json({ success: false, message: 'User not found' });
+                if (user.is_banned) return res.json({ success: false, message: 'User is banned' });
 
-                if (user.is_banned) {
-                    return res.json({ success: false, message: 'User is banned' });
-                }
-
-                // Verificar expiração
                 if (user.expires_at && new Date(user.expires_at) < new Date()) {
                     return res.json({ success: false, message: 'License expired' });
                 }
 
-                // Atualizar last_login
                 db.run('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
 
                 res.json({
@@ -283,20 +263,15 @@ app.post('/api/login', (req, res) => {
 
         // Key não usada - ativar
         const expiresAt = keyData.expires_at;
-
-        // Criar usuário
         const username = 'user_' + Date.now().toString().slice(-6);
+
         db.run(
             'INSERT INTO users (username, key_license, subscription, hwid, expires_at) VALUES (?, ?, ?, ?, ?)',
             [username, key, keyData.subscription, hwid, expiresAt],
             function(err) {
-                if (err) {
-                    return res.json({ success: false, message: 'Error activating key: ' + err.message });
-                }
+                if (err) return res.json({ success: false, message: 'Error activating key: ' + err.message });
 
                 const userId = this.lastID;
-
-                // Atualizar key como usada
                 db.run(
                     'UPDATE keys SET status = "Used", hwid = ?, username = ?, used_at = CURRENT_TIMESTAMP WHERE key_license = ?',
                     [hwid, username, key]
@@ -317,46 +292,26 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// ============ REGISTER (CRIAR CONTA) ============
+// ============ REGISTER ============
 app.post('/api/register', (req, res) => {
     const { username, email, password, key, hwid } = req.body;
 
     if (!username || !email || !password || !key) {
         return res.json({ success: false, message: 'All fields required' });
     }
+    if (username.length < 3) return res.json({ success: false, message: 'Username must be at least 3 characters' });
+    if (password.length < 6) return res.json({ success: false, message: 'Password must be at least 6 characters' });
+    if (!email.includes('@')) return res.json({ success: false, message: 'Invalid email' });
 
-    if (username.length < 3) {
-        return res.json({ success: false, message: 'Username must be at least 3 characters' });
-    }
-
-    if (password.length < 6) {
-        return res.json({ success: false, message: 'Password must be at least 6 characters' });
-    }
-
-    if (!email.includes('@')) {
-        return res.json({ success: false, message: 'Invalid email' });
-    }
-
-    // Verificar se usuário existe
     db.get('SELECT id FROM users WHERE username = ?', [username], (err, existingUser) => {
         if (err) return res.json({ success: false, message: 'Database error' });
         if (existingUser) return res.json({ success: false, message: 'Username already exists' });
 
-        // Verificar key
         db.get('SELECT * FROM keys WHERE key_license = ?', [key], (err, keyData) => {
-            if (err || !keyData) {
-                return res.json({ success: false, message: 'Invalid license key' });
-            }
+            if (err || !keyData) return res.json({ success: false, message: 'Invalid license key' });
+            if (keyData.banned) return res.json({ success: false, message: 'Key is banned' });
+            if (keyData.status === 'Used') return res.json({ success: false, message: 'Key already used' });
 
-            if (keyData.banned) {
-                return res.json({ success: false, message: 'Key is banned' });
-            }
-
-            if (keyData.status === 'Used') {
-                return res.json({ success: false, message: 'Key already used' });
-            }
-
-            // Criar usuário
             const hashedPassword = bcrypt.hashSync(password, 10);
             const expiresAt = keyData.expires_at;
 
@@ -364,11 +319,8 @@ app.post('/api/register', (req, res) => {
                 'INSERT INTO users (username, email, password, key_license, subscription, hwid, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [username, email, hashedPassword, key, keyData.subscription, hwid || null, expiresAt],
                 function(err) {
-                    if (err) {
-                        return res.json({ success: false, message: 'Error creating user: ' + err.message });
-                    }
+                    if (err) return res.json({ success: false, message: 'Error creating user: ' + err.message });
 
-                    // Marcar key como usada
                     db.run(
                         'UPDATE keys SET status = "Used", hwid = ?, username = ?, used_at = CURRENT_TIMESTAMP WHERE key_license = ?',
                         [hwid || null, username, key]
@@ -391,10 +343,9 @@ app.post('/api/register', (req, res) => {
     });
 });
 
-// ============ VERIFICAR SESSÃO ============
+// ============ VERIFICAR TOKEN ============
 app.post('/api/verify', (req, res) => {
     const { token } = req.body;
-    // Token JWT simplificado (apenas demo)
     if (!token) return res.json({ success: false, message: 'Token required' });
 
     try {
@@ -402,13 +353,8 @@ app.post('/api/verify', (req, res) => {
         const userId = decoded.userId;
 
         db.get('SELECT * FROM users WHERE id = ?', [userId], (err, user) => {
-            if (err || !user) {
-                return res.json({ success: false, message: 'Invalid token' });
-            }
-
-            if (user.is_banned) {
-                return res.json({ success: false, message: 'User is banned' });
-            }
+            if (err || !user) return res.json({ success: false, message: 'Invalid token' });
+            if (user.is_banned) return res.json({ success: false, message: 'User is banned' });
 
             res.json({
                 success: true,
@@ -429,6 +375,21 @@ app.post('/api/verify', (req, res) => {
 // ============ LOGOUT ============
 app.post('/api/logout', (req, res) => {
     res.json({ success: true, message: 'Logged out' });
+});
+
+// ============ SERVE O HTML ============
+app.get('/', (req, res) => {
+    res.send(`
+<!DOCTYPE html>
+<html>
+<head><title>Loader API</title></head>
+<body style="background:#0A0A0A;color:#00D4FF;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;flex-direction:column;">
+    <h1>🚀 LOADER API</h1>
+    <p style="color:#666;">Sistema funcionando!</p>
+    <p style="color:#444;font-size:12px;">Acesse o painel admin pelo WPF</p>
+</body>
+</html>
+    `);
 });
 
 // =============================================
