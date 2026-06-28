@@ -92,7 +92,10 @@ function getExpirationDate(expiresIn) {
 // ROTAS DA API
 // =============================================
 
-// ============ GERAR KEY ============
+app.get('/', (req, res) => {
+    res.json({ status: 'online', message: 'Loader API funcionando!' });
+});
+
 app.post('/api/generate-key', (req, res) => {
     const { admin_token, subscription, expires_in, quantity } = req.body;
 
@@ -122,7 +125,6 @@ app.post('/api/generate-key', (req, res) => {
     }
 });
 
-// ============ LISTAR KEYS ============
 app.get('/api/keys', (req, res) => {
     const { admin_token } = req.query;
     if (admin_token !== 'ADMIN_SECRET_TOKEN_123') {
@@ -135,7 +137,6 @@ app.get('/api/keys', (req, res) => {
     });
 });
 
-// ============ BAN KEY ============
 app.post('/api/ban-key', (req, res) => {
     const { admin_token, key, reason } = req.body;
     if (admin_token !== 'ADMIN_SECRET_TOKEN_123') {
@@ -148,7 +149,6 @@ app.post('/api/ban-key', (req, res) => {
     });
 });
 
-// ============ UNBAN KEY ============
 app.post('/api/unban-key', (req, res) => {
     const { admin_token, key } = req.body;
     if (admin_token !== 'ADMIN_SECRET_TOKEN_123') {
@@ -161,7 +161,6 @@ app.post('/api/unban-key', (req, res) => {
     });
 });
 
-// ============ DELETAR KEY ============
 app.delete('/api/delete-key/:key', (req, res) => {
     const { admin_token } = req.query;
     const { key } = req.params;
@@ -176,7 +175,6 @@ app.delete('/api/delete-key/:key', (req, res) => {
     });
 });
 
-// ============ LISTAR USUARIOS ============
 app.get('/api/users', (req, res) => {
     const { admin_token } = req.query;
     if (admin_token !== 'ADMIN_SECRET_TOKEN_123') {
@@ -189,7 +187,6 @@ app.get('/api/users', (req, res) => {
     });
 });
 
-// ============ BAN USER ============
 app.post('/api/ban-user', (req, res) => {
     const { admin_token, username, reason } = req.body;
     if (admin_token !== 'ADMIN_SECRET_TOKEN_123') {
@@ -202,7 +199,6 @@ app.post('/api/ban-user', (req, res) => {
     });
 });
 
-// ============ UNBAN USER ============
 app.post('/api/unban-user', (req, res) => {
     const { admin_token, username } = req.body;
     if (admin_token !== 'ADMIN_SECRET_TOKEN_123') {
@@ -215,7 +211,6 @@ app.post('/api/unban-user', (req, res) => {
     });
 });
 
-// ============ LOGIN ============
 app.post('/api/login', (req, res) => {
     const { key, hwid } = req.body;
 
@@ -292,7 +287,6 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// ============ REGISTER ============
 app.post('/api/register', (req, res) => {
     const { username, email, password, key, hwid } = req.body;
 
@@ -343,7 +337,6 @@ app.post('/api/register', (req, res) => {
     });
 });
 
-// ============ VERIFICAR TOKEN ============
 app.post('/api/verify', (req, res) => {
     const { token } = req.body;
     if (!token) return res.json({ success: false, message: 'Token required' });
@@ -372,24 +365,8 @@ app.post('/api/verify', (req, res) => {
     }
 });
 
-// ============ LOGOUT ============
 app.post('/api/logout', (req, res) => {
     res.json({ success: true, message: 'Logged out' });
-});
-
-// ============ SERVE O HTML ============
-app.get('/', (req, res) => {
-    res.send(`
-<!DOCTYPE html>
-<html>
-<head><title>Loader API</title></head>
-<body style="background:#0A0A0A;color:#00D4FF;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;flex-direction:column;">
-    <h1>🚀 LOADER API</h1>
-    <p style="color:#666;">Sistema funcionando!</p>
-    <p style="color:#444;font-size:12px;">Acesse o painel admin pelo WPF</p>
-</body>
-</html>
-    `);
 });
 
 // =============================================
